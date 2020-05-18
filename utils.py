@@ -1,3 +1,4 @@
+from collections import OrderedDict
 import datetime
 import os
 
@@ -40,3 +41,24 @@ def get_dirname(mode, is_embedding=True):
     if not os.path.exists(dname):
         os.makedirs(dname)
     return dname
+
+
+def load_embedding(embedding_path, requires_grad=True):
+    state = torch.load(embedding_path)
+
+    if 'u_embedding.weight' in state:
+        weight = state['u_embedding.weight']
+        state = OrderedDict()
+        state['weight'] = weight
+    elif 'u_embeddings.weight' in state:
+        weight = state['u_embedding.weight']
+        state = OrderedDict()
+        state['weight'] = weight
+
+    vocabulary_size, embedding_dim = state['weight'].shape
+    model = nn.Embedding(vocabulary_size, embedding_dim, sparse=True)
+    model.load_state_dict(state)
+    model.requires_grad_(requires_grad)  # May not be needed
+    return model, embedding_dim
+
+
