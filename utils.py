@@ -1,3 +1,6 @@
+import datetime
+import os
+
 import torch
 import torch.nn as nn
 import random
@@ -5,6 +8,7 @@ import random
 from torch.utils.data import Dataset
 import numpy as np
 
+KST = datetime.timezone(datetime.timedelta(hours=9))
 
 class CosineLoss(nn.Module):
     def __init__(self):
@@ -20,3 +24,19 @@ class CosineLoss(nn.Module):
 
         loss = (1-torch.stack(loss)).mean()
         return loss
+
+
+def now_kst():
+    return datetime.datetime.now(tz=KST).strftime('%H:%M')
+
+
+def get_dirname(mode, is_embedding=True):
+    t = datetime.datetime.now(tz=KST).strftime('%m%d_%H%M')
+    if is_embedding:
+        dname = f'./backup/embedding_{mode}_{t}'
+    else:
+        dname = f'./backup/classifier_{mode}_{t}'
+
+    if not os.path.exists(dname):
+        os.makedirs(dname)
+    return dname

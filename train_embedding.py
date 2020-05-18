@@ -1,6 +1,6 @@
 """
 Note:
-  'embedding.pth' and 'log.txt' are saved under ./backup/embedding_backup_.../
+  'embedding.pth' and 'log.txt' are saved under ./backup/.../
   directory. The argument parser of this script is automatically generated
   by docopt package using this help message itself.
 
@@ -10,7 +10,6 @@ Usage:
   train_embedding.py (-h | --help)
 
 Options:
-  -h --help         Show this screen.
   -d --dim <int>    Embedding dimension [default: 128]
   -b --batch <int>  Batch size          [default: 100]
   --lr <float>      Learning rate       [default: 1e-1]
@@ -18,9 +17,9 @@ Options:
   -s --seed <int>   Random seed [default: 0]
   --device <int>    Cuda device [default: 0]
   --file <str>      Path to input file [default: data/paper_author.txt]
+  -h --help         Show this screen.
 """
 
-import datetime
 import os
 import time
 
@@ -35,22 +34,7 @@ from tqdm import tqdm
 
 from data import FixedLengthContextDataset, HyperedgeDataset
 from model import SkipGram
-from utils import CosineLoss
-
-KST = datetime.timezone(datetime.timedelta(hours=9))
-
-
-def now_kst():
-    return datetime.datetime.now(tz=KST).strftime('%H:%M')
-
-
-def get_dirname(mode):
-    t = datetime.datetime.now(tz=KST).strftime('%m%d_%H%M')
-    dname = f'./backup/{mode}_embedding_{t}'
-
-    if not os.path.exists(dname):
-        os.makedirs(dname)
-    return dname
+from utils import CosineLoss, now_kst, get_dirname
 
 
 def train_embedding(trainloader, model, optimizer, criterion, device, epoch, batch_size, logdir=None):
@@ -95,7 +79,7 @@ def train_embedding(trainloader, model, optimizer, criterion, device, epoch, bat
     return avg_loss
 
 
-def train(model, loader, epoch_num=100, lr=0.2, print_backup_interval=1000):
+def train(model, loader, epoch_num=100, lr=0.2, print_backup_interval=1000, device=None):
     print("start training")
     optimizer = optim.SGD(model.parameters(), lr=lr)
     dname = get_dirname('skipgram')
@@ -134,10 +118,9 @@ def train(model, loader, epoch_num=100, lr=0.2, print_backup_interval=1000):
         print()
 
 
-if __name__ == '__main__':
+def main():
     args = args = docopt(__doc__)
     np.random.seed(int(args['--seed']))
-
     embedding_dim = int(args['--dim'])
     batch_size    = int(args['--batch'])
     lr     = float(args['--lr'])
@@ -176,8 +159,12 @@ if __name__ == '__main__':
         if torch.cuda.is_available():
             model.cuda(device=device)
 
-        batch_size = 32  # Big batch size may not work well
+        # TODO: Make num_workers cmd argument
         num_workers = 4
         loader = DataLoader(dset, batch_size, num_workers=num_workers)
 
-        train(model, loader, epoch_num=10000, lr=0.1)
+        train(model, loader, epoch_num=epochs, lr=lr, device=device)
+
+
+if __name__ == '__main__':
+    main()

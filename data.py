@@ -1,6 +1,7 @@
 from itertools import combinations
 from random import shuffle, sample
 
+import numpy as np
 import torch
 from torch.utils.data import Dataset
 
@@ -82,7 +83,7 @@ class HyperedgeDataset(Dataset):
 
 class QueryDataset(Dataset):
     def __init__(self, split='train', ratio=0.8,
-                 querypath='query_public.txt', answerpath='answer_public.txt',
+                 querypath='./data/query_public.txt', answerpath='./data/answer_public.txt',
                  zero_based=True):
         super(QueryDataset, self).__init__()
 
