@@ -50,10 +50,6 @@ def load_embedding(embedding_path, requires_grad=True):
         weight = state['u_embedding.weight']
         state = OrderedDict()
         state['weight'] = weight
-    elif 'u_embeddings.weight' in state:
-        weight = state['u_embedding.weight']
-        state = OrderedDict()
-        state['weight'] = weight
 
     vocabulary_size, embedding_dim = state['weight'].shape
     model = nn.Embedding(vocabulary_size, embedding_dim, sparse=True)
