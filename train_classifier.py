@@ -103,7 +103,7 @@ def main():
     args = docopt(__doc__)
     np.random.seed(int(args['--seed']))
     hidden = int(args['--hidden'])
-    droput = float(args['--dropout'])
+    dropout = float(args['--dropout'])
     batch_size    = int(args['--batch'])
     lr     = float(args['--lr'])
     epochs = int(args['--epochs'])
@@ -116,7 +116,7 @@ def main():
     valid_loader = DataLoader(valid_dset, batch_size=1, shuffle=False)
 
     embedding, embedding_dim = load_embedding(args['--embedding'])
-    classifier = Classifier(embedding_dim, hidden, droput)
+    classifier = Classifier(embedding_dim, hidden, dropout)
     if torch.cuda.is_available():
         embedding.to(device)
         classifier.to(device)
