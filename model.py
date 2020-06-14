@@ -71,8 +71,8 @@ class DeepSet(nn.Module):
 
     @property
     def savename(self):
-        poolmode = '/'.join(name for name, op in self.pools.items() if op)
-        return f'deepset({poolmode})'
+        poolmode = ','.join(name for name, op in self.pools.items() if op)
+        return f'deepset-{poolmode}'
 
     def forward(self, feats):
         pool_outputs = []
@@ -81,6 +81,8 @@ class DeepSet(nn.Module):
                 affine = getattr(self, f'affine_before_{name}')
                 out = affine(feats)
                 out = pool_op(out, dim=1)
+                if not isinstance(out, torch.Tensor):
+                    out = out[0]
                 pool_outputs.append(out)
         out = torch.cat(pool_outputs, dim=-1)
 
