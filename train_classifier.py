@@ -5,21 +5,26 @@ Note:
   docopt package using this help message itself.
 
 Usage:
-  train_classifier.py (--embedding <str>) [options]
+  train_classifier.py (--embedding <str>) (--lstm | --deepset) [options]
   train_classifier.py (-h | --help)
 
 Options:
-  --embedding <str> Path for embedding.pth (required)
-  --train_embedding Train embedding [default: True]
-  --hidden <int>    Hidden size     [default: 128]
-  --dropout <float> Dropout rate    [default: 0.2]
-  -b --batch <int>  Batch size      [default: 100]
-  --lr <float>      Learning rate   [default: 1e-3]
-  -e --epochs <int> Epochs          [default: 100]
-  -s --seed <int>   Random seed [default: 0]
-  --device <int>    Cuda device [default: 0]
-  --ratio <float>   Train validation split ratio [default: 0.2]
-  -h --help         Show this screen
+  --embedding <str>     Path for embedding.pth (required)
+  --train_embedding     When set, re-train embedding
+
+  --lstm                When set, use bidirectional LSTM aggregator
+  --deepset             When set, use DeepSet aggregator
+  --hidden <int>        Hidden size         [default: 128]
+  --dropout <float>     Dropout rate        [default: 0.2]
+
+  -b --batch <int>      Batch size          [default: 100]
+  --lr <float>          Learning rate       [default: 1e-3]
+  -e --epochs <int>     Epochs              [default: 100]
+  -s --seed <int>       Random seed         [default: 0]
+  --ratio <float>       Train validation split ratio    [default: 0.2]
+
+  --device <int>        Cuda device         [default: 0]
+  -h --help             Show this screen
 """
 
 import os
@@ -39,7 +44,7 @@ from utils import get_dirname, now_kst, load_embedding
 
 
 def train_classifier(train_loader, valid_loader, classifier,
-                     optimizer, device, epoch, batch_size, logdir=None):
+                     optimizers, device, epoch, batch_size, logdir=None):
     pbar = tqdm(total=len(train_loader), initial=0,
                 bar_format="{desc:<5}{percentage:3.0f}%|{bar:10}{r_bar}")
     running_loss = 0
@@ -54,11 +59,12 @@ def train_classifier(train_loader, valid_loader, classifier,
         avg_loss += step_loss.item()
         running_loss += step_loss.item()
 
-        if (i+1) % batch_size == 0:
+        if (i+1) % batch_size == 0 or i == len(train_loader) - 1:
+            # TODO: reduce memory footprint for BP
             loss /= batch_size
-            optimizer.zero_grad()
+            [optim.zero_grad() for optim in optimizers]
             loss.backward()
-            optimizer.step()
+            [optim.step() for optim in optimizers]
             loss = 0
 
         count += 1
@@ -92,6 +98,7 @@ def train_classifier(train_loader, valid_loader, classifier,
 
 def main():
     args = docopt(__doc__)
+    train_embedding = args['--train_embedding']
     np.random.seed(int(args['--seed']))
     hidden = int(args['--hidden'])
     dropout = float(args['--dropout'])
@@ -107,16 +114,25 @@ def main():
     valid_loader = DataLoader(valid_dset, batch_size=1, shuffle=False)
 
     embedding_mode, embedding = load_embedding(
-        args['--embedding'], args['--train_embedding'], device)
-    classifier = Classifier(embedding, hidden, dropout)
+        args['--embedding'], train_embedding, device)
+    classifier = Classifier(embedding, hidden, dropout, args['--deepset'])
 
     if torch.cuda.is_available():
         classifier.to(device)
-    optimizer = optim.Adam(classifier.parameters(), lr=lr)
 
-    emb_train_mode = 'train-embedding:on' if args['--train_embedding'] else 'train-embedding:off'
-    mode = f'{classifier.savename}_embedding:{embedding_mode}_{emb_train_mode}'
+    emb_params = set(embedding.parameters())
+    cls_params = set(classifier.parameters()).difference(emb_params)
+
+    optimizer1 = optim.SparseAdam(emb_params, lr=lr)
+    optimizer2 = optim.Adam(cls_params, lr=lr)
+
+    train_embedding = 'on' if train_embedding else 'off'
+    mode = f'{classifier.savename}_emb-{embedding_mode}'\
+           f'_trainemb-{train_embedding}'
     dname = get_dirname(mode)
+    path = os.path.join(dname, 'log.txt')
+    with open(path, 'a') as f:
+        f.write(repr(args) + '\n')
     backup_path = os.path.join(dname, 'classifier.pth')
 
     # TODO: Add checkpoint training feature
@@ -124,7 +140,7 @@ def main():
     for epoch in range(epochs):
         avg_loss, val_acc = train_classifier(
             train_loader, valid_loader, classifier,
-            optimizer, device, epoch, batch_size, dname)
+            [optimizer1, optimizer2], device, epoch, batch_size, dname)
         if val_acc > best_acc:
             torch.save(classifier.state_dict(), backup_path)
 
