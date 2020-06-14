@@ -19,6 +19,8 @@ class SkipGram(nn.Module):
 
     def forward(self, pos_u, pos_v, neg_v):
         u = self.u_embedding(pos_u)
+        num_pos = pos_v.size(1)
+        num_neg = neg_v.size(1)
 
         v_embedding = self.v_embedding(pos_v)
         score = (u * v_embedding).sum(dim=-1)
@@ -29,8 +31,9 @@ class SkipGram(nn.Module):
         neg_score = (u * neg_v).sum(dim=-1)
         neg_score = F.logsigmoid(-1 * neg_score)
         loss2 = neg_score.sum(dim=-1)
-        # TODO
-        loss = loss1.mean() + loss2.mean()
+
+        # TODO: How about (loss1 / num_pos) + (loss2 / num_neg)?
+        loss = ((loss1 + loss2)/(num_pos + num_neg)).mean()
         return -1 * loss
 
     @property
