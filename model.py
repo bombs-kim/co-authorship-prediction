@@ -44,9 +44,10 @@ class SkipGram(nn.Module):
 class DeepSet(nn.Module):
     def __init__(self, embedding_size, out_size, hidden_size=None,
             sumpool=True, maxpool=False, avgpool=False, dropout_rate=0):
-        """Based on Deep Sets paper https://arxiv.org/abs/1703.06114
+        """
+        Based on Deep Sets paper https://arxiv.org/abs/1703.06114.
         When multiple pools are enabled, their outputs are concatenated
-        before affine operation.
+        before applying affine operation.
         """
         super().__init__()
 
