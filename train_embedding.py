@@ -82,7 +82,7 @@ def train_embedding(trainloader, model, optimizer, criterion, device, epoch, bat
 def train(model, loader, epoch_num=100, lr=0.2, print_backup_interval=1000, device=None):
     print("start training")
     optimizer = optim.SGD(model.parameters(), lr=lr)
-    dname = get_dirname('skipgram')
+    dname = get_dirname('embedding_skipgram')
     recent_loss = 0
 
     for epoch in range(epoch_num):
@@ -137,7 +137,7 @@ def main():
         optimizer = optim.Adam(embedding_model.parameters(), lr=lr)
         criterion = CosineLoss().to(device)
 
-        dname = get_dirname('symmetric')
+        dname = get_dirname('embedding_symmetric')
         backup_path = os.path.join(dname, 'embedding.pth')
 
         min_loss = 999999

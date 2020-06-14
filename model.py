@@ -4,6 +4,10 @@ import torch.nn.functional as F
 import numpy as np
 
 
+# No class is defined for symmetric embedding.
+# Use vanila nn.Embedding.
+
+
 class SkipGram(nn.Module):
     def __init__(self, vocab_size, embedding_dim):
         super().__init__()
@@ -25,7 +29,7 @@ class SkipGram(nn.Module):
         neg_score = (u * neg_v).sum(dim=-1)
         neg_score = F.logsigmoid(-1 * neg_score)
         loss2 = neg_score.sum(dim=-1)
-
+        # TODO
         loss = loss1.mean() + loss2.mean()
         return -1 * loss
 
@@ -35,16 +39,27 @@ class SkipGram(nn.Module):
 
 
 class Classifier(nn.Module):
-    def __init__(self, embedding_dim, hidden_size, dropout_rate):
+    def __init__(self, embedding, hidden_size, dropout_rate):
         super(Classifier, self).__init__()
+        self.embedding = embedding
+        _, embedding_dim = embedding.weight.shape
         self.rnn = nn.LSTM(embedding_dim, hidden_size=hidden_size, bidirectional=True)
         self.dropout = nn.Dropout(p=dropout_rate)
         self.fc1 = nn.Linear(hidden_size*2, hidden_size)
         self.fc2 = nn.Linear(hidden_size, 1)
         self.relu = nn.ReLU()
 
-    def forward(self, x):
-        _, (hidden, cell) = self.rnn(x)
+    @property
+    def savename(self):
+        # TODO: LSTM
+        return f'classifier:lstm'
+
+    def forward(self, nodes):
+        nodes = nodes.squeeze()
+        feats = self.embedding(nodes)
+        feats = feats.unsqueeze(1)
+
+        _, (hidden, cell) = self.rnn(feats)
         hidden = hidden.squeeze()
         hidden = torch.cat([hidden[-2], hidden[-1]])
         out = self.dropout(hidden)

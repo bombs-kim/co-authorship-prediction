@@ -5,12 +5,12 @@ Note:
   docopt package using this help message itself.
 
 Usage:
-  train_classifier.py symmetric (--embedding <str>) [options]
-  train_classifier.py skipgram  (--embedding <str>) [options]
+  train_classifier.py (--embedding <str>) [options]
   train_classifier.py (-h | --help)
 
 Options:
   --embedding <str> Path for embedding.pth (required)
+  --train_embedding Train embedding [default: True]
   --hidden <int>    Hidden size     [default: 128]
   --dropout <float> Dropout rate    [default: 0.2]
   -b --batch <int>  Batch size      [default: 100]
@@ -38,7 +38,7 @@ from model import SkipGram, Classifier
 from utils import get_dirname, now_kst, load_embedding
 
 
-def train_classifier(train_loader, valid_loader, embedding_model, classifier,
+def train_classifier(train_loader, valid_loader, classifier,
                      optimizer, device, epoch, batch_size, logdir=None):
     pbar = tqdm(total=len(train_loader), initial=0,
                 bar_format="{desc:<5}{percentage:3.0f}%|{bar:10}{r_bar}")
@@ -48,12 +48,7 @@ def train_classifier(train_loader, valid_loader, embedding_model, classifier,
     loss = 0
 
     for i, (nodes, label) in enumerate(train_loader):
-        nodes = nodes.squeeze().to(device)
-        with torch.no_grad():
-            feats = embedding_model(nodes)
-        feats = feats.unsqueeze(1)
-        score = classifier(feats)
-
+        score = classifier(nodes.to(device))
         step_loss = torch.abs(label.to(device) - score)
         loss += step_loss
         avg_loss += step_loss.item()
@@ -70,13 +65,9 @@ def train_classifier(train_loader, valid_loader, embedding_model, classifier,
         if (i+1) % 1000 == 0:
             correct = 0
             classifier.eval()
-            with torch.no_grad():
-                for nodes, label in valid_loader:
-                    nodes = nodes.squeeze().to(device)
-                    feats = embedding_model(nodes)
-                    feats = feats.unsqueeze(1)
-                    score = classifier(feats).round()
-                    correct += (score.cpu() == label).float().item()
+            for nodes, label in valid_loader:
+                score = classifier(nodes.to(device)).round()
+                correct += (score.cpu() == label).item()
 
             acc = (correct / len(valid_loader)) * 100
             classifier.train()
@@ -103,7 +94,7 @@ def main():
     args = docopt(__doc__)
     np.random.seed(int(args['--seed']))
     hidden = int(args['--hidden'])
-    droput = float(args['--dropout'])
+    dropout = float(args['--dropout'])
     batch_size    = int(args['--batch'])
     lr     = float(args['--lr'])
     epochs = int(args['--epochs'])
@@ -115,20 +106,24 @@ def main():
     train_loader = DataLoader(train_dset, batch_size=1, shuffle=True)
     valid_loader = DataLoader(valid_dset, batch_size=1, shuffle=False)
 
-    embedding, embedding_dim = load_embedding(args['--embedding'])
-    classifier = Classifier(embedding_dim, hidden, droput)
+    embedding_mode, embedding = load_embedding(
+        args['--embedding'], args['--train_embedding'], device)
+    classifier = Classifier(embedding, hidden, dropout)
+
     if torch.cuda.is_available():
-        embedding.to(device)
         classifier.to(device)
     optimizer = optim.Adam(classifier.parameters(), lr=lr)
 
-    dname = get_dirname('symmetric', is_embedding=False)
+    emb_train_mode = 'train-embedding:on' if args['--train_embedding'] else 'train-embedding:off'
+    mode = f'{classifier.savename}_embedding:{embedding_mode}_{emb_train_mode}'
+    dname = get_dirname(mode)
     backup_path = os.path.join(dname, 'classifier.pth')
 
+    # TODO: Add checkpoint training feature
     best_acc = 0
     for epoch in range(epochs):
         avg_loss, val_acc = train_classifier(
-            train_loader, valid_loader, embedding, classifier,
+            train_loader, valid_loader, classifier,
             optimizer, device, epoch, batch_size, dname)
         if val_acc > best_acc:
             torch.save(classifier.state_dict(), backup_path)

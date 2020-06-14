@@ -11,6 +11,7 @@ import numpy as np
 
 KST = datetime.timezone(datetime.timedelta(hours=9))
 
+
 class CosineLoss(nn.Module):
     def __init__(self):
         super(CosineLoss, self).__init__()
@@ -31,34 +32,31 @@ def now_kst():
     return datetime.datetime.now(tz=KST).strftime('%H:%M')
 
 
-def get_dirname(mode, is_embedding=True):
+def get_dirname(mode):
     t = datetime.datetime.now(tz=KST).strftime('%m%d_%H%M')
-    if is_embedding:
-        dname = f'./backup/embedding_{mode}_{t}'
-    else:
-        dname = f'./backup/classifier_{mode}_{t}'
-
+    dname = f'./backup/{mode}_{t}'
     if not os.path.exists(dname):
         os.makedirs(dname)
     return dname
 
 
-def load_embedding(embedding_path, requires_grad=True):
-    state = torch.load(embedding_path)
+def load_embedding(embedding_path, requires_grad=None, device=None):
+    state = torch.load(embedding_path, device)
 
+    mode = 'skipgram'
     if 'u_embedding.weight' in state:
         weight = state['u_embedding.weight']
         state = OrderedDict()
         state['weight'] = weight
     elif 'u_embeddings.weight' in state:
-        weight = state['u_embedding.weight']
+        weight = state['u_embeddings.weight']
         state = OrderedDict()
         state['weight'] = weight
+    else:
+        mode = 'symmetric'
 
     vocabulary_size, embedding_dim = state['weight'].shape
     model = nn.Embedding(vocabulary_size, embedding_dim, sparse=True)
     model.load_state_dict(state)
-    model.requires_grad_(requires_grad)  # May not be needed
-    return model, embedding_dim
-
-
+    model.requires_grad_(bool(requires_grad))
+    return mode, model
