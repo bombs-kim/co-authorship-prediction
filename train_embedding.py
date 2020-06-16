@@ -103,12 +103,16 @@ def main():
         model = SymmetricEmbedding(vocabulary_size, embedding_dim)
         if dname == 'None':
             dname = get_dirname('embedding_symmetric')
+        else:
+            os.makedirs(dname)
     # Word2Vec Skip-gram. Unsymmetric vectors are used to compute cosine similarity
     elif args['skipgram']:
         model = SkipGram(vocabulary_size, embedding_dim)
         if dname == 'None':
             dname = get_dirname('embedding_skipgram')
-       
+        else:
+            os.makedirs(dname)
+
     if torch.cuda.is_available():
         model = model.to(device)
     loader = DataLoader(dset, batch_size, num_workers=num_workers)
