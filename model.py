@@ -4,8 +4,34 @@ import torch.nn.functional as F
 import numpy as np
 
 
-# No class is defined for symmetric embedding.
-# Use vanila nn.Embedding.
+class SymmetricEmbedding(nn.Module):
+    def __init__(self, vocab_size, embedding_dim):
+        super().__init__()
+        self.embedding = nn.Embedding(
+            vocab_size, embedding_dim, sparse=True)
+        self.embedding_dim = embedding_dim
+
+    def forward(self, pos_u, pos_v, neg_v):
+        u = self.embedding(pos_u)
+        num_pos = pos_v.size(1)
+        num_neg = neg_v.size(1)
+
+        pos_v = self.embedding(pos_v)
+        score = (u * pos_v).sum(dim=-1)
+        score = F.logsigmoid(score)
+        loss1 = score.sum(dim=-1)
+
+        neg_v = self.embedding(neg_v)
+        neg_score = (u * neg_v).sum(dim=-1)        
+        neg_score = F.logsigmoid(-1 * neg_score)
+        loss2 = neg_score.sum(dim=-1)
+
+        loss = ((loss1 + loss2) / (num_pos + num_neg)).mean()
+        return -1 * loss
+
+    @property
+    def input_embedding(self):
+        return self.u_embedding.weight.data.cpu().numpy()
 
 
 class SkipGram(nn.Module):
@@ -28,7 +54,7 @@ class SkipGram(nn.Module):
         loss1 = score.sum(dim=-1)
 
         neg_v = self.v_embedding(neg_v)
-        neg_score = (u * neg_v).sum(dim=-1)
+        neg_score = (u * neg_v).sum(dim=-1)        
         neg_score = F.logsigmoid(-1 * neg_score)
         loss2 = neg_score.sum(dim=-1)
 

@@ -10,7 +10,7 @@ Usage:
 
 Options:
   --embedding <str>     Path for embedding.pth (required)
-  --train_embedding     When set, re-train embedding
+  --train-embedding     When set, re-train embedding
 
   --lstm                When set, use bidirectional LSTM aggregator
   --deepset             When set, use DeepSet aggregator
@@ -18,10 +18,12 @@ Options:
   --dropout <float>     Dropout rate        [default: 0.2]
 
   -b --batch <int>      Batch size          [default: 100]
+  --emb-lr <float>      Learning rate for embedding network [default: 1e-4]
   --lr <float>          Learning rate       [default: 1e-3]
   -e --epochs <int>     Epochs              [default: 100]
   -s --seed <int>       Random seed         [default: 0]
-  --ratio <float>       Train validation split ratio    [default: 0.2]
+  --ratio <float>       Train validation split ratio    [default: 0.8]
+  --dirname <str>       Directory name to save trained files [default: None]
 
   --device <int>        Cuda device         [default: 0]
   -h --help             Show this screen
@@ -39,27 +41,23 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from data import QueryDataset
-from model import SkipGram, Classifier
+from model import Classifier
 from utils import get_dirname, now_kst, load_embedding
 
 
 def train_classifier(train_loader, valid_loader, classifier,
                      optimizers, device, epoch, batch_size, logdir=None):
-    pbar = tqdm(total=len(train_loader), initial=0,
-                bar_format="{desc:<5}{percentage:3.0f}%|{bar:10}{r_bar}")
-    running_loss = 0
     avg_loss = 0
-    count = 0
     loss = 0
 
     for i, (nodes, label) in enumerate(train_loader):
         score = classifier(nodes.to(device))
-        step_loss = torch.abs(label.to(device) - score)
+        # L2 loss
+        step_loss = (label.to(device) - score).pow(2)
         loss += step_loss
         avg_loss += step_loss.item()
-        running_loss += step_loss.item()
 
-        if (i+1) % batch_size == 0 or i == len(train_loader) - 1:
+        if (i+1) % batch_size == 0 or (i+1) == len(train_loader):
             # TODO: reduce memory footprint for BP
             loss /= batch_size
             [optim.zero_grad() for optim in optimizers]
@@ -67,8 +65,7 @@ def train_classifier(train_loader, valid_loader, classifier,
             [optim.step() for optim in optimizers]
             loss = 0
 
-        count += 1
-        if (i+1) % 1000 == 0:
+        if (i+1) % len(train_loader) == 0:
             correct = 0
             classifier.eval()
             for nodes, label in valid_loader:
@@ -77,17 +74,12 @@ def train_classifier(train_loader, valid_loader, classifier,
 
             acc = (correct / len(valid_loader)) * 100
             classifier.train()
-            pbar.set_description('train_loss: {:.6f}, valid_acc: {:.2f}%'.format(running_loss/count, acc))
-            running_loss = 0
-            count = 0
-
-        pbar.update(1)
 
     avg_loss /= len(train_loader)
     last_acc = acc
 
-    log_msg = f'Epoch {epoch:d} | Avg Loss: {avg_loss:.6f} | Val Acc: {last_acc:.2f}% | {now_kst()}'
-    print(f'\n', log_msg)
+    log_msg = f'Epoch {epoch+1:d} | Avg Loss: {avg_loss:.6f} | Val Acc: {last_acc:.2f}% | {now_kst()}'
+    #print(f'\n', log_msg)
     if logdir:
         path = os.path.join(logdir, 'log.txt')
         with open(path, 'a') as f:
@@ -98,18 +90,22 @@ def train_classifier(train_loader, valid_loader, classifier,
 
 def main():
     args = docopt(__doc__)
-    train_embedding = args['--train_embedding']
+    train_embedding = args['--train-embedding']
     np.random.seed(int(args['--seed']))
+    torch.manual_seed(int(args['--seed']))
+    torch.cuda.manual_seed_all(int(args['--seed']))
     hidden = int(args['--hidden'])
     dropout = float(args['--dropout'])
     batch_size    = int(args['--batch'])
     lr     = float(args['--lr'])
+    emb_lr     = float(args['--emb-lr'])
     epochs = int(args['--epochs'])
     device = torch.device(int(args['--device']))
     ratio  = float(args['--ratio'])
+    dname = args['--dirname']
 
-    train_dset = QueryDataset(split='train')
-    valid_dset = QueryDataset(split='valid')
+    train_dset = QueryDataset(split='train', ratio=ratio)
+    valid_dset = QueryDataset(split='valid', ratio=ratio)
     train_loader = DataLoader(train_dset, batch_size=1, shuffle=True)
     valid_loader = DataLoader(valid_dset, batch_size=1, shuffle=False)
 
@@ -123,19 +119,24 @@ def main():
     emb_params = set(embedding.parameters())
     cls_params = set(classifier.parameters()).difference(emb_params)
 
-    optimizer1 = optim.SparseAdam(emb_params, lr=lr)
+    optimizer1 = optim.SparseAdam(emb_params, lr=emb_lr)
     optimizer2 = optim.Adam(cls_params, lr=lr)
 
     train_embedding = 'on' if train_embedding else 'off'
-    mode = f'{classifier.savename}_emb-{embedding_mode}'\
-           f'_trainemb-{train_embedding}'
-    dname = get_dirname(mode)
+    if dname == 'None':
+        mode = f'{classifier.savename}_emb-{embedding_mode}'\
+               f'_trainemb-{train_embedding}'
+        dname = get_dirname(mode)
+    else:
+        os.makedirs(dname)
     path = os.path.join(dname, 'log.txt')
     with open(path, 'a') as f:
         f.write(repr(args) + '\n')
     backup_path = os.path.join(dname, 'classifier.pth')
 
     # TODO: Add checkpoint training feature
+    pbar = tqdm(total=epochs, initial=0,
+                bar_format="{desc:<5}{percentage:3.0f}%|{bar:10}{r_bar}")
     best_acc = 0
     for epoch in range(epochs):
         avg_loss, val_acc = train_classifier(
@@ -143,6 +144,8 @@ def main():
             [optimizer1, optimizer2], device, epoch, batch_size, dname)
         if val_acc > best_acc:
             torch.save(classifier.state_dict(), backup_path)
+        pbar.set_description('Train Loss: {:.6f}, Valid Acc: {:.2f}%'.format(avg_loss, val_acc))
+        pbar.update(1)
 
 if __name__ == '__main__':
     main()

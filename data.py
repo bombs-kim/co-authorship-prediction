@@ -121,9 +121,11 @@ class QueryDataset(Dataset):
         if self.split == 'train':
             self.collaborations = np.array(self.collaborations)[train_idx]
             self.labels = np.array(self.labels)[train_idx]
+            print('training classifier with {:d} data'.format(len(self.collaborations)))
         elif self.split == 'valid':
             self.collaborations = np.array(self.collaborations)[val_idx]
             self.labels = np.array(self.labels)[val_idx]
+            print('validate classifier with {:d} data'.format(len(self.collaborations)))
 
     def __len__(self):
         return len(self.collaborations)
