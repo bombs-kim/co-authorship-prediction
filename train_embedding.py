@@ -67,10 +67,10 @@ def train(model, loader, dname, epoch_num=100, lr=0.1, print_backup_interval=100
                 join = os.path.join
                 # torch.save(model.state_dict(), join(dname, 'embedding.pth'))
                 if (epoch+1) % 1000 == 0 or (epoch+1 in (50, 100, 200, 400, 800)):
-                    torch.save(model.state_dict(), join(dname, f"embedding_{epoch:05d}.pth"))
+                    torch.save(model.state_dict(), join(dname, f"embedding_{epoch+1:05d}.pth"))
 
                 batch_sec = print_backup_interval / (time.time() - start)
-                log_msg = (f'epoch {epoch:2d}: '
+                log_msg = (f'epoch {epoch+1:2d}: '
                            f'loss {loss.item():6.4f}/{recent_loss:6.4f} {now_kst()}')
                 print(log_msg, '\r', end='')
                 with open(os.path.join(dname, "log.txt"), 'a') as f:
