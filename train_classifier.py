@@ -54,7 +54,8 @@ def train_classifier(train_loader, valid_loader, classifier,
 
     for i, (nodes, label) in enumerate(train_loader):
         score = classifier(nodes.to(device))
-        step_loss = torch.abs(label.to(device) - score)
+        # L2 loss
+        step_loss = (label.to(device) - score).pow(2)
         loss += step_loss
         avg_loss += step_loss.item()
         running_loss += step_loss.item()
@@ -100,6 +101,8 @@ def main():
     args = docopt(__doc__)
     train_embedding = args['--train_embedding']
     np.random.seed(int(args['--seed']))
+    torch.manual_seed(int(args['--seed']))
+    torch.cuda.manual_seed_all(int(args['--seed']))
     hidden = int(args['--hidden'])
     dropout = float(args['--dropout'])
     batch_size    = int(args['--batch'])
