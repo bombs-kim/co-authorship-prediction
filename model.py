@@ -32,7 +32,6 @@ class SkipGram(nn.Module):
         neg_score = F.logsigmoid(-1 * neg_score)
         loss2 = neg_score.sum(dim=-1)
 
-        # TODO: How about (loss1 / num_pos) + (loss2 / num_neg)?
         loss = ((loss1 + loss2) / (num_pos + num_neg)).mean()
         return -1 * loss
 
@@ -126,7 +125,6 @@ class Classifier(nn.Module):
         self.aggregator = aggr(
             embedding_size, aggregator_out_size, dropout_rate=dropout_rate)
         self.affine = nn.Linear(aggregator_out_size, 1)
-        self.relu = nn.ReLU()
 
     @property
     def savename(self):
