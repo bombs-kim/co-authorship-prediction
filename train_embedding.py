@@ -16,6 +16,7 @@ Options:
   -e --epochs <int>         Epochs              [default: 100]
   --max-context <int>       Maximum context length                 [default: 3]
   --neg-sample-num <int>    Number of negative samples per context [default: 3]
+  --backup-interval <int>   Interval of model backup [default: 100]
   -s --seed <int>           Random seed [default: 0]
   --device <int>            Cuda device [default: 0]
   --num-workers <int>       Number of processors [default: 4]
@@ -41,7 +42,7 @@ from model import SkipGram, SymmetricEmbedding
 from utils import CosineLoss, now_kst, get_dirname
 
 
-def train(model, loader, dname, epoch_num=100, lr=0.1, print_backup_interval=1000, device=None):
+def train(model, loader, dname, epoch_num=100, lr=0.1, backup_interval=100, device=None):
     print("start training")
     optimizer = optim.SparseAdam(model.parameters(), lr=lr)
     recent_loss = 0
@@ -66,10 +67,9 @@ def train(model, loader, dname, epoch_num=100, lr=0.1, print_backup_interval=100
             if (batch_idx+1) % len(loader) == 0:
                 join = os.path.join
                 # torch.save(model.state_dict(), join(dname, 'embedding.pth'))
-                if (epoch+1) % 1000 == 0 or (epoch+1 in (50, 100, 200, 400, 800)):
+                if (epoch+1) % backup_interval == 0:
                     torch.save(model.state_dict(), join(dname, f"embedding_{epoch+1:05d}.pth"))
 
-                batch_sec = print_backup_interval / (time.time() - start)
                 log_msg = (f'epoch {epoch+1:2d}: '
                            f'loss {loss.item():6.4f}/{recent_loss:6.4f} {now_kst()}')
                 print(log_msg, '\r', end='')
@@ -88,6 +88,7 @@ def main():
     batch_size    = int(args['--batch'])
     lr     = float(args['--lr'])
     epochs = int(args['--epochs'])
+    backup_interval = int(args['--backup-interval'])
     device = torch.device(int(args['--device']))
     num_workers = int(args['--num-workers'])
     fpath  = args['--file']
@@ -117,7 +118,7 @@ def main():
         model = model.to(device)
     loader = DataLoader(dset, batch_size, num_workers=num_workers)
 
-    train(model, loader, dname=dname, epoch_num=epochs, lr=lr, device=device)
+    train(model, loader, dname, epochs, lr, backup_interval, device)
 
 
 if __name__ == '__main__':
