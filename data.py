@@ -7,7 +7,6 @@ from torch.utils.data import Dataset
 
 
 class FixedLengthContextDataset(Dataset):
-    """Note that setting max_coauthors_per_paper may not work well"""
     def __init__(self, path, max_context=3, negative_sample=10):
         self.tups = []
         self.max_context = max_context

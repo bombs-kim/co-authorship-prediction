@@ -151,7 +151,6 @@ class Classifier(nn.Module):
         self.aggregator = aggr(
             embedding_size, aggregator_out_size, dropout_rate=dropout_rate)
         self.affine = nn.Linear(aggregator_out_size, 1)
-        self.relu = nn.ReLU()
 
     @property
     def savename(self):
