@@ -8,29 +8,30 @@ from torch.utils.data import Dataset
 
 
 class FixedLengthContextDataset(Dataset):
-    def __init__(self, path, max_context=3, negative_sample=10):
-        self.tups = []
+    def __init__(self, path, max_context=3, negative_sample_factor=10, zero_based=True):
+        self.collabs = []
         self.max_context = max_context
-        self.negative_sample = negative_sample
+        self.negative_sample_factor = negative_sample_factor
+
+        idx_correction = 1 if zero_based else 0
+
         with open(path) as f:
-            it = iter(f)
-            num_authors, num_papers = (int(n) for n  in next(f).split())
+            num_authors, num_collabs = (int(n) for n  in next(f).split())
             self.num_authors = int(num_authors)
 
-            for idx, line in enumerate(it):
-                coauthors = tuple(int(n) for n in line.split())
-                self.tups.append(coauthors)
+            for idx, line in enumerate(f):
+                # IMPORTANT: idx_correction may make the indices zero-based
+                collab = tuple(int(n) - idx_correction for n in line.split())
+                self.collabs.append(collab)
+            assert num_collabs == idx+1
 
-            if num_papers != idx+1:
-                print("num papers does not match", idx+1, num_papers)
-
-        self.authors = tuple(range(1, self.num_authors+1))
+        self.authors = tuple(range(self.num_authors))
 
     def __len__(self):
-        return len(self.tups)
+        return len(self.collabs)
 
     def __getitem__(self, idx):
-        l = list(self.tups[idx])
+        l = list(self.collabs[idx])
         shuffle(l)
 
         input_author = [l.pop()]
@@ -43,11 +44,10 @@ class FixedLengthContextDataset(Dataset):
 
         # Negative sample
         # To understanding, negative_sample * max_context should be used!
-        neg = sample(self.authors, self.negative_sample * self.max_context)
+        neg = sample(self.authors, self.negative_sample_factor * self.max_context)
 
         ret = input_author, context, neg
-        # Change 1-based index to 0-based index
-        return tuple(torch.tensor(t) - 1 for t in (ret))
+        return tuple(torch.tensor(t) for t in (ret))
 
 
 
@@ -83,23 +83,26 @@ class HyperedgeDataset(Dataset):
 
 class QueryDataset(Dataset):
     def __init__(self, split='train', ratio=0.8,
-                 querypath='./data/query_public.txt',
-                 answerpath='./data/answer_public.txt',
+                 query_path='./data/query_public.txt',
+                 answer_path='./data/answer_public.txt',
+                 non_foreign_authors_path='./data/paper_author.txt',
                  permpath='./perm.txt',
-                 zero_based=True):
+                 zero_based=True,
+                 equally_handle_foreign_authors=False):
         super(QueryDataset, self).__init__()
 
-        query_public = open(querypath, 'r')
-        answer_public = open(answerpath, 'r')
+        query_public = open(query_path, 'r')
+        answer_public = open(answer_path, 'r')
         query_lines = query_public.readlines()
         answer_lines = answer_public.readlines()
 
         self.zero_based = zero_based
-        self.nodes = set()
-        self.collaborations = []
+        self.collabs = []
         self.labels = []
         self.split = split
         self.ratio = ratio
+
+        idx_correction = 1 if zero_based else 0
 
         for i, line in enumerate(query_lines[1:]):
             label = answer_lines[i].strip()
@@ -109,10 +112,10 @@ class QueryDataset(Dataset):
                  self.labels.append(0)
             else:
                 raise NotImplementedError
-            node = line.strip().split(' ')
-            node = [int(i) for i in node]
-            self.nodes.update(node)
-            self.collaborations.append(node)
+            collab = line.strip().split(' ')
+            # IMPORTANT: idx_correction may make the indices zero-based
+            collab = tuple(int(i) - idx_correction for i in collab)
+            self.collabs.append(collab)
 
         query_public.close()
         answer_public.close()
@@ -122,27 +125,64 @@ class QueryDataset(Dataset):
             for num in f:
                 num = int(num.strip())
                 perm.append(num)
-        assert len(perm) == len(self.collaborations)
+        assert len(perm) == len(self.collabs)
 
-        split_boundary = int(ratio * len(self.collaborations))
+        split_boundary = int(ratio * len(self.collabs))
         self.train_indices = train_indices = perm[:split_boundary]
         self.val_indices = val_indices = perm[split_boundary:]
 
         if self.split == 'train':
-            self.collaborations = np.array(self.collaborations)[train_indices]
+            self.collabs = np.array(self.collabs)[train_indices]
             self.labels = np.array(self.labels)[train_indices]
-            print(f'training classifier with {len(self.collaborations)} data')
+            print(f'training classifier with {len(self.collabs)} data')
         elif self.split == 'valid':
-            self.collaborations = np.array(self.collaborations)[val_indices]
+            self.collabs = np.array(self.collabs)[val_indices]
             self.labels = np.array(self.labels)[val_indices]
-            print(f'validate classifier with {len(self.collaborations)} data')
+            print(f'validate classifier with {len(self.collabs)} data')
+
+        self.equally_handle_foreign_authors = equally_handle_foreign_authors
+        if self.equally_handle_foreign_authors:
+            with open(non_foreign_authors_path) as f:
+                num_authors, num_collabs = (int(n) for n  in next(f).split())
+                all_authors = set(range(num_authors))
+                seen_authors = set()
+                for idx, line in enumerate(f):
+                    # IMPORTANT: idx_correction may make the indices zero-based
+                    coauthors = (int(n) - idx_correction for n in line.split())
+                    seen_authors.update(coauthors)
+                assert num_collabs == idx + 1
+            self.foreign_authors = all_authors.difference(seen_authors)
+            self.foreign_author_idx = len(all_authors)  # == last_idx + 1
+            print('Equally handle foreign authors')
+
+    def handle_foreign(self, collab):
+        foreign_exist = False
+        for idx, author in enumerate(collab):
+            if author.item() in self.foreign_authors:
+                collab[idx] = self.foreign_author_idx
+                foreign_exist = True
+        # Remove redundant or do sorting
+        if foreign_exist:
+            collab = torch.unique(collab)
+        return collab
 
     def __len__(self):
-        return len(self.collaborations)
+        return len(self.collabs)
 
     def __getitem__(self, idx):
-        authors = torch.tensor(self.collaborations[idx], dtype=torch.long)
+        collab = torch.tensor(self.collabs[idx], dtype=torch.long)
         label = torch.tensor(self.labels[idx], dtype=torch.long)
-        idx_correction = 1 if self.zero_based else 0
-        # IMPORTANT: 0-based index may be used
-        return authors - idx_correction, label
+        if self.equally_handle_foreign_authors:
+            collab = self.handle_foreign(collab)
+        return collab, label
+
+# Test
+if __name__ == '__main__':
+    double_cnt = {}
+    dset1 = QueryDataset(equally_handle_foreign_authors=False)
+    dset2 = QueryDataset(equally_handle_foreign_authors=True)
+    example_foreign_data = [62, 71, 92, 99, 122, 127, 149]
+    for i in example_foreign_data:
+        print("without handle foriegn", dset1[i][0])
+        print("   with handle foriegn", dset2[i][0])
+        print()

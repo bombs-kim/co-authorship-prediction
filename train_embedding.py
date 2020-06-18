@@ -15,7 +15,7 @@ Options:
   --lr <float>              Learning rate       [default: 1e-2]
   -e --epochs <int>         Epochs              [default: 1000]
   --max-context <int>       Maximum context length                 [default: 3]
-  --neg-sample-num <int>    Number of negative samples per context [default: 10]
+  --neg-sample-factor <int>   Number of negative samples per context [default: 10]
   --backup-interval <int>   Interval of model backup [default: 100]
   -s --seed <int>           Random seed [default: 0]
   --device <int>            Cuda device [default: 0]
@@ -94,11 +94,11 @@ def main():
     fpath  = args['--file']
     dname = args['--dirname']
     max_context = int(args['--max-context'])
-    neg_sample_num = int(args['--neg-sample-num'])
-    
-    dset = FixedLengthContextDataset(fpath, max_context, neg_sample_num)
+    neg_sample_factor = int(args['--neg-sample-factor'])
+
+    dset = FixedLengthContextDataset(fpath, max_context, neg_sample_factor)
     vocabulary_size = dset.num_authors
-    
+
     # Symmetric vectors are used to compute cosine similarity
     if args['symmetric']:
         model = SymmetricEmbedding(vocabulary_size, embedding_dim)

@@ -11,6 +11,7 @@ Usage:
 Options:
   --embedding <str>     Path for embedding.pth (required)
   --train-embedding     When set, re-train embedding
+  --handle-foreign      When set, make all foreign authors to have the same idx. If there are more than one foreign authors, only one idx remains.
 
   --lstm                When set, use bidirectional LSTM aggregator
   --deepset             When set, use DeepSet aggregator
@@ -50,10 +51,10 @@ def train_classifier(train_loader, valid_loader, classifier,
     avg_loss = 0
     loss = 0
 
-    for i, (nodes, label) in enumerate(train_loader):
-        score = classifier(nodes.to(device))
+    for i, (collabs, labels) in enumerate(train_loader):
+        score = classifier(collabs.to(device))
         # L2 loss
-        step_loss = (label.to(device) - score).pow(2)
+        step_loss = (labels.to(device) - score).pow(2)
         loss += step_loss
         avg_loss += step_loss.item()
 
@@ -68,9 +69,9 @@ def train_classifier(train_loader, valid_loader, classifier,
         if (i+1) % len(train_loader) == 0:
             correct = 0
             classifier.eval()
-            for nodes, label in valid_loader:
-                score = classifier(nodes.to(device)).round()
-                correct += (score.cpu() == label).item()
+            for collabs, labels in valid_loader:
+                score = classifier(collabs.to(device)).round()
+                correct += (score.cpu() == labels).item()
 
             acc = (correct / len(valid_loader)) * 100
             classifier.train()
@@ -91,9 +92,12 @@ def train_classifier(train_loader, valid_loader, classifier,
 def main():
     args = docopt(__doc__)
     train_embedding = args['--train-embedding']
+    handle_foreign = args['--handle-foreign']
+
     np.random.seed(int(args['--seed']))
     torch.manual_seed(int(args['--seed']))
     torch.cuda.manual_seed_all(int(args['--seed']))
+
     hidden = int(args['--hidden'])
     dropout = float(args['--dropout'])
     batch_size    = int(args['--batch'])
@@ -104,14 +108,17 @@ def main():
     ratio  = float(args['--ratio'])
     dname = args['--dirname']
 
-    train_dset = QueryDataset(split='train', ratio=ratio)
-    valid_dset = QueryDataset(split='valid', ratio=ratio)
-    train_loader = DataLoader(train_dset, batch_size=1, shuffle=True)
-    valid_loader = DataLoader(valid_dset, batch_size=1, shuffle=False)
+    train_dset = QueryDataset(split='train', ratio=ratio,
+                              equally_handle_foreign_authors=handle_foreign)
+    valid_dset = QueryDataset(split='valid', ratio=ratio,
+                              equally_handle_foreign_authors=handle_foreign)
+    train_loader = DataLoader(train_dset, batch_size=1, num_workers=1, shuffle=True)
+    valid_loader = DataLoader(valid_dset, batch_size=1, num_workers=1, shuffle=False)
 
     embedding_mode, embedding = load_embedding(
         args['--embedding'], train_embedding, device)
-    classifier = Classifier(embedding, hidden, dropout, args['--deepset'])
+    classifier = Classifier(embedding, hidden, dropout, args['--deepset'],
+                            equally_handle_foreign_authors=handle_foreign)
 
     if torch.cuda.is_available():
         classifier.to(device)
@@ -128,13 +135,14 @@ def main():
                f'_trainemb-{train_embedding}'
         dname = get_dirname(mode)
     else:
-        os.makedirs(dname)
+        os.makedirs(dname, exist_ok=True)
     path = os.path.join(dname, 'log.txt')
     with open(path, 'a') as f:
         f.write(repr(args) + '\n')
     backup_path = os.path.join(dname, 'classifier.pth')
 
     # TODO: Add checkpoint training feature
+
     pbar = tqdm(total=epochs, initial=0,
                 bar_format="{desc:<5}{percentage:3.0f}%|{bar:10}{r_bar}")
     best_acc = 0

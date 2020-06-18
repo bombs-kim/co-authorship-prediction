@@ -22,7 +22,7 @@ class SymmetricEmbedding(nn.Module):
         loss1 = score.sum(dim=-1)
 
         neg_v = self.embedding(neg_v)
-        neg_score = (u * neg_v).sum(dim=-1)        
+        neg_score = (u * neg_v).sum(dim=-1)
         neg_score = F.logsigmoid(-1 * neg_score)
         loss2 = neg_score.sum(dim=-1)
 
@@ -54,7 +54,7 @@ class SkipGram(nn.Module):
         loss1 = score.sum(dim=-1)
 
         neg_v = self.v_embedding(neg_v)
-        neg_score = (u * neg_v).sum(dim=-1)        
+        neg_score = (u * neg_v).sum(dim=-1)
         neg_score = F.logsigmoid(-1 * neg_score)
         loss2 = neg_score.sum(dim=-1)
 
@@ -143,7 +143,8 @@ class BidirectionalLSTM(nn.Module):
 
 class Classifier(nn.Module):
     def __init__(self, embedding, aggregator_out_size,
-                 dropout_rate=0, deepset=False):
+                 dropout_rate=0, deepset=False,
+                 equally_handle_foreign_authors=True):
         super().__init__()
         self.embedding = embedding
         _, embedding_size = embedding.weight.shape
@@ -152,6 +153,20 @@ class Classifier(nn.Module):
             embedding_size, aggregator_out_size, dropout_rate=dropout_rate)
         self.affine = nn.Linear(aggregator_out_size, 1)
 
+        self.equally_handle_foreign_authors = equally_handle_foreign_authors
+        if equally_handle_foreign_authors:
+            # Mokey-patch Embedding module
+            foreign_emb = nn.Embedding(1 , embedding_size)
+            # no_grad is needed since torch.cat operation is
+            # traced by default for backpropagation
+            with torch.no_grad():
+                new_weight = torch.cat([embedding.weight, foreign_emb.weight])
+            _emb_requires_grad = embedding.weight.requires_grad
+            embedding.weight = nn.Parameter(new_weight)
+
+            embedding.num_embeddings += 1
+            embedding.requires_grad_(_emb_requires_grad)
+
     @property
     def savename(self):
         if isinstance(self.aggregator, BidirectionalLSTM):
@@ -159,8 +174,8 @@ class Classifier(nn.Module):
         else:
             return f'classifier-{self.aggregator.savename}'
 
-    def forward(self, nodes):
-        feats = self.embedding(nodes)
+    def forward(self, collabs):
+        feats = self.embedding(collabs)
         out = self.aggregator(feats)
         out = torch.sigmoid(self.affine(out))
         return out
