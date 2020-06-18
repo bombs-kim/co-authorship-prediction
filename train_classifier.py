@@ -52,12 +52,16 @@ def train_classifier(train_loader, valid_loader, classifier,
     avg_loss = 0
     loss = 0
 
+    train_correct = 0
     for i, (collabs, labels) in enumerate(train_loader):
         score = classifier(collabs.to(device))
         # L2 loss
         step_loss = (labels.to(device) - score).pow(2)
         loss += step_loss
         avg_loss += step_loss.item()
+
+        with torch.no_grad():
+            train_correct += (score.cpu().round() == labels).item()
 
         if (i+1) % batch_size == 0 or (i+1) == len(train_loader):
             # TODO: reduce memory footprint for BP
@@ -75,19 +79,20 @@ def train_classifier(train_loader, valid_loader, classifier,
                 correct += (score.cpu() == labels).item()
 
             acc = (correct / len(valid_loader)) * 100
+            train_acc = (train_correct / len(train_loader)) * 100
             classifier.train()
 
     avg_loss /= len(train_loader)
-    last_acc = acc
 
-    log_msg = f'Epoch {epoch+1:d} | Avg Loss: {avg_loss:.6f} | Val Acc: {last_acc:.2f}% | {now_kst()}'
-    #print(f'\n', log_msg)
+    log_msg = f'Epoch {epoch+1:d} | Avg Loss: {avg_loss:.6f} | Train Acc: '\
+              f'{train_acc:.2f}% | Val Acc: {acc:.2f}% | {now_kst()}'
+
     if logdir:
         path = os.path.join(logdir, 'log.txt')
         with open(path, 'a') as f:
             f.write(log_msg + '\n')
 
-    return avg_loss, last_acc
+    return avg_loss, train_acc, acc
 
 
 def main():
@@ -150,12 +155,13 @@ def main():
                 bar_format="{desc:<5}{percentage:3.0f}%|{bar:10}{r_bar}")
     best_acc = 0
     for epoch in range(epochs):
-        avg_loss, val_acc = train_classifier(
+        avg_loss, train_acc, val_acc = train_classifier(
             train_loader, valid_loader, classifier,
             [optimizer1, optimizer2], device, epoch, batch_size, dname)
         if val_acc > best_acc:
             torch.save(classifier.state_dict(), backup_path)
-        pbar.set_description('Train Loss: {:.6f}, Valid Acc: {:.2f}%'.format(avg_loss, val_acc))
+        pbar.set_description(
+            f'Train Loss: {avg_loss:.6f}, Train Acc:{train_acc:.2f} Valid Acc: {val_acc:.2f}%')
         pbar.update(1)
 
 if __name__ == '__main__':

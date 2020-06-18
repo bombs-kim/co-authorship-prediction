@@ -29,7 +29,7 @@ class CosineLoss(nn.Module):
 
 
 def now_kst():
-    return datetime.datetime.now(tz=KST).strftime('%H:%M')
+    return datetime.datetime.now(tz=KST).strftime('%Hh%Mm%Ss')
 
 
 def get_dirname(mode):
