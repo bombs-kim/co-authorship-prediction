@@ -1,4 +1,5 @@
 from itertools import combinations
+import os
 from random import shuffle, sample
 
 import numpy as np
@@ -82,7 +83,9 @@ class HyperedgeDataset(Dataset):
 
 class QueryDataset(Dataset):
     def __init__(self, split='train', ratio=0.8,
-                 querypath='./data/query_public.txt', answerpath='./data/answer_public.txt',
+                 querypath='./data/query_public.txt',
+                 answerpath='./data/answer_public.txt',
+                 permpath='./perm.txt',
                  zero_based=True):
         super(QueryDataset, self).__init__()
 
@@ -114,18 +117,25 @@ class QueryDataset(Dataset):
         query_public.close()
         answer_public.close()
 
-        perm = np.random.permutation(len(self.collaborations))
-        split_idx = int(ratio*len(self.collaborations))
-        train_idx = perm[:split_idx]
-        val_idx = perm[split_idx:]
+        with open(permpath) as f:
+            perm = []
+            for num in f:
+                num = int(num.strip())
+                perm.append(num)
+        assert len(perm) == len(self.collaborations)
+
+        split_boundary = int(ratio * len(self.collaborations))
+        self.train_indices = train_indices = perm[:split_boundary]
+        self.val_indices = val_indices = perm[split_boundary:]
+
         if self.split == 'train':
-            self.collaborations = np.array(self.collaborations)[train_idx]
-            self.labels = np.array(self.labels)[train_idx]
-            print('training classifier with {:d} data'.format(len(self.collaborations)))
+            self.collaborations = np.array(self.collaborations)[train_indices]
+            self.labels = np.array(self.labels)[train_indices]
+            print(f'training classifier with {len(self.collaborations)} data')
         elif self.split == 'valid':
-            self.collaborations = np.array(self.collaborations)[val_idx]
-            self.labels = np.array(self.labels)[val_idx]
-            print('validate classifier with {:d} data'.format(len(self.collaborations)))
+            self.collaborations = np.array(self.collaborations)[val_indices]
+            self.labels = np.array(self.labels)[val_indices]
+            print(f'validate classifier with {len(self.collaborations)} data')
 
     def __len__(self):
         return len(self.collaborations)
