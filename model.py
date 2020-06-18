@@ -144,13 +144,17 @@ class BidirectionalLSTM(nn.Module):
 class Classifier(nn.Module):
     def __init__(self, embedding, aggregator_out_size,
                  dropout_rate=0, deepset=False,
-                 equally_handle_foreign_authors=True):
+                 equally_handle_foreign_authors=True,
+                 enable_all_pools=False):
         super().__init__()
         self.embedding = embedding
         _, embedding_size = embedding.weight.shape
         aggr = DeepSet if deepset else BidirectionalLSTM
+        kwargs = {'dropout_rate': dropout_rate}
+        if enable_all_pools:
+            kwargs['maxpool'] = kwargs['avgpool'] = True
         self.aggregator = aggr(
-            embedding_size, aggregator_out_size, dropout_rate=dropout_rate)
+            embedding_size, aggregator_out_size, **kwargs)
         self.affine = nn.Linear(aggregator_out_size, 1)
 
         self.equally_handle_foreign_authors = equally_handle_foreign_authors

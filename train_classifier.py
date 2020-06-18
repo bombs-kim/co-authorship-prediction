@@ -12,6 +12,7 @@ Options:
   --embedding <str>     Path for embedding.pth (required)
   --train-embedding     When set, re-train embedding
   --handle-foreign      When set, make all foreign authors to have the same idx. If there are more than one foreign authors, only one idx remains.
+  --enable-all-pools    (DeepSet only option) enable all poolings
 
   --lstm                When set, use bidirectional LSTM aggregator
   --deepset             When set, use DeepSet aggregator
@@ -93,6 +94,7 @@ def main():
     args = docopt(__doc__)
     train_embedding = args['--train-embedding']
     handle_foreign = args['--handle-foreign']
+    enable_all_pools = args['--enable-all-pools']
 
     np.random.seed(int(args['--seed']))
     torch.manual_seed(int(args['--seed']))
@@ -118,7 +120,8 @@ def main():
     embedding_mode, embedding = load_embedding(
         args['--embedding'], train_embedding, device)
     classifier = Classifier(embedding, hidden, dropout, args['--deepset'],
-                            equally_handle_foreign_authors=handle_foreign)
+                            equally_handle_foreign_authors=handle_foreign,
+                            enable_all_pools=enable_all_pools)
 
     if torch.cuda.is_available():
         classifier.to(device)
