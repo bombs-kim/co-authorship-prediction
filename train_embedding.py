@@ -11,17 +11,20 @@ Usage:
 
 Options:
   -d --dim <int>            Embedding dimension [default: 128]
+  --max-context <int>       Maximum context length                 [default: 3]
+  --neg-sample-factor <int>   Number of negative samples per context [default: 10]
+
   -b --batch <int>          Batch size          [default: 100]
   --lr <float>              Learning rate       [default: 1e-2]
   -e --epochs <int>         Epochs              [default: 1000]
-  --max-context <int>       Maximum context length                 [default: 3]
-  --neg-sample-factor <int>   Number of negative samples per context [default: 10]
-  --backup-interval <int>   Interval of model backup [default: 100]
+
   -s --seed <int>           Random seed [default: 0]
   --device <int>            Cuda device [default: 0]
   --num-workers <int>       Number of processors [default: 4]
   --file <str>              Path to input file [default: data/paper_author.txt]
-  --dirname <str>           Directory name to save trained files [default: None]
+  --backup-interval <int>   Interval of model backup [default: 100]
+  --dirname <str>           Directory name to save trained files
+
   -h --help                 Show this screen.
 """
 
@@ -48,8 +51,6 @@ def train(model, loader, dname, epoch_num=100, lr=0.1, backup_interval=100, devi
     recent_loss = 0
 
     for epoch in range(epoch_num):
-        start = time.time()
-
         for batch_idx, (pos_u, pos_v, neg_v) in enumerate(loader):
             if torch.cuda.is_available():
                 pos_u = pos_u.to(device=device)
@@ -65,36 +66,38 @@ def train(model, loader, dname, epoch_num=100, lr=0.1, backup_interval=100, devi
             recent_loss = 0.95 * recent_loss + 0.05 * loss.item()
 
             if (batch_idx+1) % len(loader) == 0:
-                join = os.path.join
-                # torch.save(model.state_dict(), join(dname, 'embedding.pth'))
                 if (epoch+1) % backup_interval == 0:
-                    torch.save(model.state_dict(), join(dname, f"embedding_{epoch+1:05d}.pth"))
-
-                log_msg = (f'epoch {epoch+1:2d}: '
-                           f'loss {loss.item():6.4f}/{recent_loss:6.4f} {now_kst()}')
+                    torch.save(model.state_dict(),
+                               os.path.join(dname,
+                                            f"embedding_{epoch+1:05d}.pth"))
+                log_msg = (f'epoch {epoch+1:2d}: loss {loss.item():6.4f}'
+                           f'/{recent_loss:6.4f} {now_kst()}')
                 print(log_msg, '\r', end='')
                 with open(os.path.join(dname, "log.txt"), 'a') as f:
                     f.write(log_msg + '\n')
-                start = time.time()
         print()
 
 
 def main():
     args = docopt(__doc__)
-    np.random.seed(int(args['--seed']))
-    torch.manual_seed(int(args['--seed']))
-    torch.cuda.manual_seed_all(int(args['--seed']))
+
     embedding_dim = int(args['--dim'])
+    max_context = int(args['--max-context'])
+    neg_sample_factor = int(args['--neg-sample-factor'])
+
     batch_size    = int(args['--batch'])
     lr     = float(args['--lr'])
     epochs = int(args['--epochs'])
-    backup_interval = int(args['--backup-interval'])
+
+    np.random.seed(int(args['--seed']))
+    torch.manual_seed(int(args['--seed']))
+    torch.cuda.manual_seed_all(int(args['--seed']))
     device = torch.device(int(args['--device']))
+    print(f"{device} will be used")
     num_workers = int(args['--num-workers'])
     fpath  = args['--file']
+    backup_interval = int(args['--backup-interval'])
     dname = args['--dirname']
-    max_context = int(args['--max-context'])
-    neg_sample_factor = int(args['--neg-sample-factor'])
 
     dset = FixedLengthContextDataset(fpath, max_context, neg_sample_factor)
     vocabulary_size = dset.num_authors
@@ -102,22 +105,19 @@ def main():
     # Symmetric vectors are used to compute cosine similarity
     if args['symmetric']:
         model = SymmetricEmbedding(vocabulary_size, embedding_dim)
-        if dname == 'None':
-            dname = get_dirname('embedding_symmetric')
-        else:
-            os.makedirs(dname)
     # Word2Vec Skip-gram. Unsymmetric vectors are used to compute cosine similarity
     elif args['skipgram']:
         model = SkipGram(vocabulary_size, embedding_dim)
-        if dname == 'None':
-            dname = get_dirname('embedding_skipgram')
-        else:
-            os.makedirs(dname)
+
+    if dname == None:
+        tmp = 'symmetric' if args['symmetric'] else 'skipgram'
+        dname = get_dirname(f'embedding_{tmp}')
+    else:
+        os.makedirs(dname)
 
     if torch.cuda.is_available():
         model = model.to(device)
     loader = DataLoader(dset, batch_size, num_workers=num_workers)
-
     train(model, loader, dname, epochs, lr, backup_interval, device)
 
 

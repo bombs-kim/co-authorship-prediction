@@ -12,22 +12,23 @@ Options:
   --embedding <str>     Path for embedding.pth (required)
   --train-embedding     When set, re-train embedding
   --handle-foreign      When set, make all foreign authors to have the same idx. If there are more than one foreign authors, only one idx remains.
-  --enable-all-pools    (DeepSet only option) enable all poolings
 
   --lstm                When set, use bidirectional LSTM aggregator
   --deepset             When set, use DeepSet aggregator
   --hidden <int>        Hidden size         [default: 128]
   --dropout <float>     Dropout rate        [default: 0.2]
+  --enable-all-pools    (DeepSet only option) enable all poolings
 
   -b --batch <int>      Batch size          [default: 100]
   --emb-lr <float>      Learning rate for embedding network [default: 1e-4]
   --lr <float>          Learning rate       [default: 1e-3]
   -e --epochs <int>     Epochs              [default: 100]
-  -s --seed <int>       Random seed         [default: 0]
   --ratio <float>       Train validation split ratio    [default: 0.8]
-  --dirname <str>       Directory name to save trained files [default: None]
 
+  -s --seed <int>       Random seed         [default: 0]
+  --dirname <str>       Directory name to save trained files [default: None]
   --device <int>        Cuda device         [default: 0]
+
   -h --help             Show this screen
 """
 
@@ -112,6 +113,7 @@ def main():
     emb_lr     = float(args['--emb-lr'])
     epochs = int(args['--epochs'])
     device = torch.device(int(args['--device']))
+    print(f"{device} will be used")
     ratio  = float(args['--ratio'])
     dname = args['--dirname']
 
