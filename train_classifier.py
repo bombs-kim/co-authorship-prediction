@@ -22,6 +22,7 @@ Options:
   -b --batch <int>      Batch size          [default: 100]
   --emb-lr <float>      Learning rate for embedding network [default: 1e-4]
   --lr <float>          Learning rate       [default: 1e-3]
+  --weight-decay <float>    Weight Decay    [default: 1e-4]
   -e --epochs <int>     Epochs              [default: 100]
   --ratio <float>       Train validation split ratio    [default: 0.8]
 
@@ -111,6 +112,7 @@ def main():
     batch_size    = int(args['--batch'])
     lr     = float(args['--lr'])
     emb_lr     = float(args['--emb-lr'])
+    weight_decay = float(args['--weight-decay'])
     epochs = int(args['--epochs'])
     device = torch.device(int(args['--device']))
     print(f"{device} will be used")
@@ -137,7 +139,7 @@ def main():
     cls_params = set(classifier.parameters()).difference(emb_params)
 
     optimizer1 = optim.SparseAdam(emb_params, lr=emb_lr)
-    optimizer2 = optim.Adam(cls_params, lr=lr)
+    optimizer2 = optim.Adam(cls_params, lr=lr, weight_decay=weight_decay)
 
     train_embedding = 'on' if train_embedding else 'off'
     if dname == 'None':
