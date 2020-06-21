@@ -53,25 +53,39 @@ def train_classifier(train_loader, valid_loader, classifier,
                      optimizers, device, epoch, batch_size, logdir=None):
     avg_loss = 0
     loss = 0
-
+    buckets = {}
     train_correct = 0
-    for i, (collabs, labels) in enumerate(train_loader):
-        score = classifier(collabs.to(device))
-        # L2 loss
-        step_loss = (labels.to(device) - score).pow(2)
-        loss += step_loss
-        avg_loss += step_loss.item()
 
-        with torch.no_grad():
-            train_correct += (score.cpu().round() == labels).item()
-
-        if (i+1) % batch_size == 0 or (i+1) == len(train_loader):
-            # TODO: reduce memory footprint for BP
-            loss /= batch_size
+    # NOTE: train_loader is supposed to have batch size 1
+    for i, (collab, label) in enumerate(train_loader):
+        # Do bucketing to allow batch size to be bigger than 1
+        if (i+1) % batch_size != 0 and (i+1) != len(train_loader):
+            seq_len = collab.shape[1]
+            if seq_len not in buckets:
+                buckets[seq_len] = ([], [])
+            collabs_list, labels_list = buckets[seq_len]
+            collabs_list.append(collab)
+            labels_list.append(label)
+        else:
             [optim.zero_grad() for optim in optimizers]
+            for collabs_list, labels_list in buckets.values():
+                collabs = torch.cat(collabs_list, dim=0)
+                labels = torch.cat(labels_list, dim=0)
+                score = classifier(collabs.to(device))
+                # L2 loss
+                step_loss = (labels[:, None].to(device) - score).pow(2).sum()
+                loss += step_loss
+                avg_loss += step_loss.item()
+                # Measuer accuracy
+                with torch.no_grad():
+                    correct = (labels[:, None] == score.cpu().round()).sum()
+                    train_correct += correct.item()
+            loss /= batch_size
             loss.backward()
+
             [optim.step() for optim in optimizers]
             loss = 0
+            buckets = {}
 
         if (i+1) % len(train_loader) == 0:
             correct = 0
