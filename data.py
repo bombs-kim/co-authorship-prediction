@@ -91,7 +91,7 @@ class QueryDataset(Dataset):
                  zero_based=True,
                  equally_handle_foreign_authors=False,
                  use_paper_author=False,
-                 oversample_false_collabs=True):
+                 oversample_false_collabs=False):
         super(QueryDataset, self).__init__()
 
         query_public = open(query_path, 'r')

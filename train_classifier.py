@@ -25,6 +25,8 @@ Options:
   --weight-decay <float>    Weight Decay    [default: 1e-4]
   -e --epochs <int>     Epochs              [default: 100]
   --ratio <float>       Train validation split ratio    [default: 0.8]
+  --use-paper-author    Use paper_author.txt in addition to query_public.txt
+  --oversample-false-collabs    Oversample false collabs. Only effective when used with --use-paper-author.
 
   -s --seed <int>       Random seed         [default: 0]
   --dirname <str>       Directory name to save trained files [default: None]
@@ -131,7 +133,9 @@ def main():
     dname = args['--dirname']
 
     train_dset = QueryDataset(split='train', ratio=ratio,
-                              equally_handle_foreign_authors=handle_foreign)
+                              equally_handle_foreign_authors=handle_foreign,
+                              use_paper_author=['--use-paper-author'],
+                              oversample_false_collabs=args['--oversample-false-collabs'])
     valid_dset = QueryDataset(split='valid', ratio=ratio,
                               equally_handle_foreign_authors=handle_foreign)
     train_loader = DataLoader(train_dset, batch_size=1, num_workers=1, shuffle=True)
