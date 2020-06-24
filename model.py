@@ -4,6 +4,48 @@ import torch.nn.functional as F
 import numpy as np
 
 
+class MovingAverageNorm(nn.BatchNorm1d):
+    """Code based on https://github.com/ptrblck/pytorch_misc"""
+    def __init__(self, num_features, eps=1e-5, momentum=0.1,
+                 affine=True):
+        super().__init__(
+            num_features, eps, momentum, affine, True)
+
+    def forward(self, input):
+        self._check_input_dim(input)
+
+        exponential_average_factor = 0.0
+
+        # calculate running estimates
+        if self.training:
+            if self.num_batches_tracked is not None:
+                self.num_batches_tracked += 1
+                if self.momentum is None:  # use cumulative moving average
+                    exponential_average_factor = 1.0 / float(self.num_batches_tracked)
+                else:  # use exponential moving average
+                    exponential_average_factor = self.momentum
+
+            batch_mean = input.mean([0])
+            # batch_var = input.var([0], unbiased=False)
+            # TODO: make sure batch_var formula is okay
+            batch_var = ((input - self.running_mean[None, :]) ** 2).mean([0])
+            n = input.numel() / input.size(1)
+            with torch.no_grad():
+                self.running_mean = exponential_average_factor * batch_mean\
+                    + (1 - exponential_average_factor) * self.running_mean
+                self.running_var = exponential_average_factor * batch_var\
+                    + (1 - exponential_average_factor) * self.running_var
+
+        mean = self.running_mean
+        var = self.running_var
+
+        input = (input - mean[None, :]) / (torch.sqrt(var[None, :] + self.eps))
+        if self.affine:
+            input = input * self.weight[None, :] + self.bias[None, :]
+
+        return input
+
+
 class SymmetricEmbedding(nn.Module):
     def __init__(self, vocab_size, embedding_dim):
         super().__init__()
@@ -80,6 +122,8 @@ class DeepSet(nn.Module):
         assert num_pools>=1
         hidden_size = hidden_size if hidden_size else out_size
 
+        # TODO: do maxpooll based on the absolute values
+
         self.pools = {
             'sumpool': torch.sum if sumpool else None,
             'maxpool': torch.max if maxpool else None,
@@ -94,6 +138,8 @@ class DeepSet(nn.Module):
         self.dropout = nn.Dropout(p=dropout_rate)
         self.affine = nn.Linear(hidden_size * num_pools, out_size)
         self.relu = nn.ReLU()
+        # self.norm1 = MovingAverageNorm(hidden_size * num_pools)
+        # self.norm2 = MovingAverageNorm(out_size)
 
     @property
     def savename(self):
@@ -111,10 +157,13 @@ class DeepSet(nn.Module):
                     out = out[0]
                 pool_outputs.append(out)
         out = torch.cat(pool_outputs, dim=-1)
+        out = self.relu(out)  # IMPORTANT: newly added!
+        # out = self.norm1(out)
 
         out = self.dropout(out)
         out = self.affine(out)
         out = self.relu(out)
+        # out = self.norm2(out)
         return out
 
 
@@ -126,8 +175,10 @@ class BidirectionalLSTM(nn.Module):
         self.lstm = nn.LSTM(
             embedding_size, hidden_size=hidden_size, bidirectional=True)
         self.dropout = nn.Dropout(p=dropout_rate)
-        self.affine = nn.Linear(hidden_size*2, out_size)  # bidirectional
+        self.affine = nn.Linear(hidden_size*2, out_size)  # bidirectional LSTM
         self.relu = nn.ReLU()
+        # self.norm1 = MovingAverageNorm(hidden_size*2)
+        # self.norm2 = MovingAverageNorm(out_size)
 
     def forward(self, feats):
         feats = feats.permute(1, 0, 2)
@@ -135,9 +186,11 @@ class BidirectionalLSTM(nn.Module):
         _, (hidden, cell) = self.lstm(feats)
         hidden = hidden.permute(1, 0, 2)
         hidden = hidden.reshape(hidden.shape[0], -1)
+        # hidden = self.norm1(hidden)
         out = self.dropout(hidden)
         out = self.affine(out)
         out = self.relu(out)
+        # out = self.norm2(out)
         return out
 
 

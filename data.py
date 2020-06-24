@@ -1,6 +1,6 @@
 from itertools import combinations
 import os
-from random import shuffle, sample
+from random import choice, shuffle, sample
 
 import numpy as np
 import torch
@@ -81,14 +81,17 @@ class HyperedgeDataset(Dataset):
         return torch.tensor(self.hyperedges[idx], dtype=torch.long)
 
 
+# TODO: Added use_paper_author option to train_classifier
 class QueryDataset(Dataset):
     def __init__(self, split='train', ratio=0.8,
                  query_path='./data/query_public.txt',
                  answer_path='./data/answer_public.txt',
-                 non_foreign_authors_path='./data/paper_author.txt',
+                 authors_path='./data/paper_author.txt',
                  permpath='./perm.txt',
                  zero_based=True,
-                 equally_handle_foreign_authors=False):
+                 equally_handle_foreign_authors=False,
+                 use_paper_author=False,
+                 oversample_false_collabs=True):
         super(QueryDataset, self).__init__()
 
         query_public = open(query_path, 'r')
@@ -142,18 +145,41 @@ class QueryDataset(Dataset):
 
         self.equally_handle_foreign_authors = equally_handle_foreign_authors
         if self.equally_handle_foreign_authors:
-            with open(non_foreign_authors_path) as f:
+            print('Equally handle foreign authors')
+            with open(authors_path) as f:
                 num_authors, num_collabs = (int(n) for n  in next(f).split())
                 all_authors = set(range(num_authors))
                 seen_authors = set()
                 for idx, line in enumerate(f):
                     # IMPORTANT: idx_correction may make the indices zero-based
-                    coauthors = (int(n) - idx_correction for n in line.split())
+                    # BUG correction!
+                    coauthors = tuple(int(n) - idx_correction for n in line.split())
                     seen_authors.update(coauthors)
                 assert num_collabs == idx + 1
             self.foreign_authors = all_authors.difference(seen_authors)
             self.foreign_author_idx = len(all_authors)  # == last_idx + 1
-            print('Equally handle foreign authors')
+
+        if oversample_false_collabs:
+            assert len(self.collabs) == len(self.labels)
+            false_collabs = []
+            for collab, label in zip(self.collabs, self.labels):
+                if label == 0:
+                    false_collabs.append(collab)
+
+        if self.split == 'train' and use_paper_author:
+            self.collabs = list(self.collabs)
+            self.labels = list(self.labels)
+            with open(authors_path) as f:
+                num_authors, num_collabs = (int(n) for n  in next(f).split())
+                for idx, line in enumerate(f):
+                    collab = tuple(int(n) - idx_correction for n in line.split())
+                    self.collabs.append(collab)
+                    self.labels.append(1)
+            if oversample_false_collabs:
+                for _ in range(num_collabs):
+                    self.collabs.append(choice(false_collabs))
+                    self.labels.append(0)
+            print(f"Use {authors_path} data as training {len(self.collabs)}")
 
     def handle_foreign(self, collab):
         foreign_exist = False
