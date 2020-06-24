@@ -10,20 +10,20 @@ Usage:
 
 Options:
   --embedding <str>     Path for embedding.pth (required)
-  --train-embedding     When set, re-train embedding
+  --no-train-embedding  When set, re-train embedding
   --handle-foreign      When set, make all foreign authors to have the same idx. If there are more than one foreign authors, only one idx remains.
 
   --lstm                When set, use bidirectional LSTM aggregator
   --deepset             When set, use DeepSet aggregator
-  --hidden <int>        Hidden size         [default: 128]
-  --dropout <float>     Dropout rate        [default: 0.2]
+  --hidden <int>        Hidden size         [default: 256]
+  --dropout <float>     Dropout rate        [default: 0.5]
   --enable-all-pools    (DeepSet only option) enable all poolings
 
   -b --batch <int>      Batch size          [default: 100]
   --emb-lr <float>      Learning rate for embedding network [default: 1e-3]
   --lr <float>          Learning rate       [default: 1e-3]
   --weight-decay <float>    Weight Decay    [default: 1e-4]
-  -e --epochs <int>     Epochs              [default: 100]
+  -e --epochs <int>     Epochs              [default: 10]
   --ratio <float>       Train validation split ratio    [default: 0.8]
   --use-paper-author    Use paper_author.txt in addition to query_public.txt
   --oversample-false-collabs    Oversample false collabs. Only effective when used with --use-paper-author.
@@ -112,7 +112,7 @@ def train_classifier(train_loader, valid_loader, classifier,
 
 def main():
     args = docopt(__doc__)
-    train_embedding = args['--train-embedding']
+    train_embedding = not args['--no-train-embedding']
     handle_foreign = args['--handle-foreign']
     enable_all_pools = args['--enable-all-pools']
 
