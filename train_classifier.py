@@ -134,7 +134,7 @@ def main():
 
     train_dset = QueryDataset(split='train', ratio=ratio,
                               equally_handle_foreign_authors=handle_foreign,
-                              use_paper_author=['--use-paper-author'],
+                              use_paper_author=args['--use-paper-author'],
                               oversample_false_collabs=args['--oversample-false-collabs'])
     valid_dset = QueryDataset(split='valid', ratio=ratio,
                               equally_handle_foreign_authors=handle_foreign)
