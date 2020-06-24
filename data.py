@@ -152,8 +152,7 @@ class QueryDataset(Dataset):
                 seen_authors = set()
                 for idx, line in enumerate(f):
                     # IMPORTANT: idx_correction may make the indices zero-based
-                    # BUG correction!
-                    coauthors = tuple(int(n) - idx_correction for n in line.split())
+                    coauthors = (int(n) - idx_correction for n in line.split())
                     seen_authors.update(coauthors)
                 assert num_collabs == idx + 1
             self.foreign_authors = all_authors.difference(seen_authors)
