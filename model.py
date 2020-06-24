@@ -122,8 +122,6 @@ class DeepSet(nn.Module):
         assert num_pools>=1
         hidden_size = hidden_size if hidden_size else out_size
 
-        # TODO: do maxpooll based on the absolute values
-
         self.pools = {
             'sumpool': torch.sum if sumpool else None,
             'maxpool': torch.max if maxpool else None,

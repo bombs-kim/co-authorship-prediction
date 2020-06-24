@@ -87,7 +87,7 @@ def train_classifier(train_loader, valid_loader, classifier,
             loss = 0
             buckets = {}
 
-        if (i+1) % len(train_loader) == 0:
+        if (i+1) % 50000 == 0 or (i+1) == len(train_loader):
             correct = 0
             classifier.eval()
             for collabs, labels in valid_loader:
@@ -95,18 +95,15 @@ def train_classifier(train_loader, valid_loader, classifier,
                 correct += (score.cpu() == labels).item()
 
             acc = (correct / len(valid_loader)) * 100
-            train_acc = (train_correct / len(train_loader)) * 100
+            train_acc = (train_correct / (i+1)) * 100
             classifier.train()
 
-    avg_loss /= len(train_loader)
-
-    log_msg = f'Epoch {epoch+1:d} | Avg Loss: {avg_loss:.6f} | Train Acc: '\
-              f'{train_acc:.2f}% | Val Acc: {acc:.2f}% | {now_kst()}'
-
-    if logdir:
-        path = os.path.join(logdir, 'log.txt')
-        with open(path, 'a') as f:
-            f.write(log_msg + '\n')
+            _avg_loss = avg_loss / (i+1)
+            log_msg = f'Epoch {epoch+1:d} | Avg Loss: {_avg_loss:.6f} | Train Acc: '\
+                    f'{train_acc:.2f}% | Val Acc: {acc:.2f}% | {now_kst()}'
+            path = os.path.join(logdir, 'log.txt')
+            with open(path, 'a') as f:
+                f.write(log_msg + '\n')
 
     return avg_loss, train_acc, acc
 
