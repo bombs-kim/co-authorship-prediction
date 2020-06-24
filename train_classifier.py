@@ -20,7 +20,7 @@ Options:
   --enable-all-pools    (DeepSet only option) enable all poolings
 
   -b --batch <int>      Batch size          [default: 100]
-  --emb-lr <float>      Learning rate for embedding network [default: 1e-4]
+  --emb-lr <float>      Learning rate for embedding network [default: 1e-3]
   --lr <float>          Learning rate       [default: 1e-3]
   --weight-decay <float>    Weight Decay    [default: 1e-4]
   -e --epochs <int>     Epochs              [default: 100]
