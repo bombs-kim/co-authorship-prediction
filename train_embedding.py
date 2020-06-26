@@ -10,9 +10,9 @@ Usage:
   train_embedding.py (-h | --help)
 
 Options:
-  -d --dim <int>            Embedding dimension [default: 128]
+  -d --dim <int>            Embedding dimension [default: 256]
   --max-context <int>       Maximum context length                 [default: 3]
-  --neg-sample-factor <int>   Number of negative samples per context [default: 10]
+  --neg-sample-factor <int>   Number of negative samples per context [default: 20]
 
   -b --batch <int>          Batch size          [default: 100]
   --lr <float>              Learning rate       [default: 1e-2]
