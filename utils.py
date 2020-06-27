@@ -54,6 +54,9 @@ def load_embedding(embedding_path, requires_grad=None, device=None):
         state['weight'] = weight
     else:
         mode = 'symmetric'
+        weight = state['embedding.weight']
+        state = OrderedDict()
+        state['weight'] = weight
 
     vocabulary_size, embedding_dim = state['weight'].shape
     model = nn.Embedding(vocabulary_size, embedding_dim, sparse=True)
