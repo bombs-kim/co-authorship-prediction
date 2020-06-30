@@ -33,6 +33,7 @@ Options:
   --device <int>        Cuda device         [default: 0]
 
   -h --help             Show this screen
+  --threshold <float>   threshold
 """
 
 import os
@@ -52,12 +53,17 @@ from utils import get_dirname, now_kst, load_embedding
 
 
 def train_classifier(train_loader, valid_loader, classifier,
-                     optimizers, device, epoch, batch_size, logdir=None):
+                     optimizers, device, epoch, batch_size, logdir=None, threshold=0.5):
     avg_loss = 0
     loss = 0
     buckets = {}
     train_correct = 0
-
+    precision = 0
+    recall = 0
+    positive = 0
+    true_positive = 0
+    false_negative = 0
+    
     # NOTE: train_loader is supposed to have batch size 1
     for i, (collab, label) in enumerate(train_loader):
         # Do bucketing to allow batch size to be bigger than 1
@@ -80,7 +86,8 @@ def train_classifier(train_loader, valid_loader, classifier,
                 avg_loss += step_loss.item()
                 # Measuer accuracy
                 with torch.no_grad():
-                    correct = (labels[:, None] == score.cpu().round()).sum()
+                    positives = score.cpu() >= threshold
+                    correct = (labels[:, None] == positives).sum()
                     train_correct += correct.item()
             loss /= batch_size
             loss.backward()
@@ -93,21 +100,27 @@ def train_classifier(train_loader, valid_loader, classifier,
             correct = 0
             classifier.eval()
             for collabs, labels in valid_loader:
-                score = classifier(collabs.to(device)).round()
-                correct += (score.cpu() == labels).item()
-
+                score = classifier(collabs.to(device))
+                positives = score.cpu() >= threshold
+                correct += (positives == labels).item()
+                positive += (positives).item()
+                true_positive += ((positives.item() == True) and (labels.item() == True))
+                false_negative += ((labels.item() == True) and (positives.item() == False))
+            precision =  true_positive / positive
+            recall = true_positive / (true_positive+false_negative)    
             acc = (correct / len(valid_loader)) * 100
             train_acc = (train_correct / (i+1)) * 100
             classifier.train()
 
             _avg_loss = avg_loss / (i+1)
             log_msg = f'Epoch {epoch+1:d} | Avg Loss: {_avg_loss:.6f} | Train Acc: '\
-                    f'{train_acc:.2f}% | Val Acc: {acc:.2f}% | {now_kst()}'
+                    f'{train_acc:.2f}% | Val Acc: {acc:.2f}% | '\
+                    f'Precision {precision:.2f} | Recall {recall:.2f} | {now_kst()}'
             path = os.path.join(logdir, 'log.txt')
             with open(path, 'a') as f:
                 f.write(log_msg + '\n')
 
-    return avg_loss, train_acc, acc
+    return avg_loss, train_acc, acc, precision, recall
 
 
 def main():
@@ -130,6 +143,7 @@ def main():
     device = torch.device(int(args['--device']))
     print(f"{device} will be used")
     ratio  = float(args['--ratio'])
+    threshold = float(args['--threshold'])
     dname = args['--dirname']
 
     train_dset = QueryDataset(split='train', ratio=ratio,
@@ -174,13 +188,13 @@ def main():
                 bar_format="{desc:<5}{percentage:3.0f}%|{bar:10}{r_bar}")
     best_acc = 0
     for epoch in range(epochs):
-        avg_loss, train_acc, val_acc = train_classifier(
+        avg_loss, train_acc, val_acc, precision, recall = train_classifier(
             train_loader, valid_loader, classifier,
-            [optimizer1, optimizer2], device, epoch, batch_size, dname)
+            [optimizer1, optimizer2], device, epoch, batch_size, dname, threshold)
         if val_acc > best_acc:
             torch.save(classifier.state_dict(), backup_path)
         pbar.set_description(
-            f'Train Loss: {avg_loss:.6f}, Train Acc:{train_acc:.2f} Valid Acc: {val_acc:.2f}%')
+            f'Train Loss: {avg_loss:.6f}, Train Acc:{train_acc:.2f} Valid Acc: {val_acc:.2f}% Precision: {precision:.2f} Recall: {recall:.2f}')
         pbar.update(1)
 
 if __name__ == '__main__':
