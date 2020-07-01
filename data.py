@@ -196,7 +196,8 @@ class QueryDataset(Dataset):
 
     def __getitem__(self, idx):
         l = list(self.collabs[idx])
-        shuffle(l)
+        if self.split == 'train':
+            shuffle(l)
         collab = torch.tensor(l, dtype=torch.long)
         label = torch.tensor(self.labels[idx], dtype=torch.long)
         if self.equally_handle_foreign_authors:
