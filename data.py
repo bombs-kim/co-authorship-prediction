@@ -203,6 +203,31 @@ class QueryDataset(Dataset):
             collab = self.handle_foreign(collab)
         return collab, label
 
+
+class QueryTestset(Dataset):
+    def __init__(self, query_path='./data/query_private.txt', zero_based=True):
+        super(QueryTestset, self).__init__()
+        query_private = open(query_path, 'r')
+        query_lines = query_private.readlines()
+
+        self.collabs = []
+        idx_correction = 1 if zero_based else 0
+        for i, line in enumerate(query_lines[1:]):
+            collab = line.strip().split(' ')
+            # IMPORTANT: idx_correction may make the indices zero-based
+            collab = tuple(int(i) - idx_correction for i in collab)
+            self.collabs.append(collab)
+
+        query_private.close()
+
+    def __len__(self):
+        return len(self.collabs)
+
+    def __getitem__(self, index):
+        collab = torch.tensor(self.collabs[index], dtype=torch.long)
+        return collab
+
+
 # Test
 if __name__ == '__main__':
     double_cnt = {}
