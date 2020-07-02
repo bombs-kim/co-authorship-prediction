@@ -51,7 +51,6 @@ def test_classifier(valid_loader, classifier, device, threshold):
         precision =  true_positive / positive
         recall = true_positive / (true_positive + false_negative)
         acc = (correct / len(valid_loader))
-        classifier.train()
 
         log_msg = f'Threshold: {threshold:.4f} | Val Acc: {acc:.4f} | '\
                 f'Precision {precision:.4f} | Recall {recall:.4f}'
