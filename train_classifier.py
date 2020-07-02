@@ -27,16 +27,17 @@ Options:
   --ratio <float>       Train validation split ratio    [default: 0.8]
   --use-paper-author    Use paper_author.txt in addition to query_public.txt
   --oversample-false-collabs    Oversample false collabs. Only effective when used with --use-paper-author.
+  --threshold <float>   threshold           [default: 0.5]
 
   -s --seed <int>       Random seed         [default: 0]
   --dirname <str>       Directory name to save trained files [default: None]
   --device <int>        Cuda device         [default: 0]
 
   -h --help             Show this screen
-  --threshold <float>   threshold
 """
 
 import os
+import copy
 
 # parsing library for cmd options and arguments https://github.com/docopt/docopt
 from docopt import docopt
@@ -63,6 +64,7 @@ def train_classifier(train_loader, valid_loader, classifier,
     positive = 0
     true_positive = 0
     false_negative = 0
+    best_acc = 0
     
     # NOTE: train_loader is supposed to have batch size 1
     for i, (collab, label) in enumerate(train_loader):
@@ -96,7 +98,7 @@ def train_classifier(train_loader, valid_loader, classifier,
             loss = 0
             buckets = {}
 
-        if (i+1) % 50000 == 0 or (i+1) == len(train_loader):
+        if (i+1) % 5000 == 0 or (i+1) == len(train_loader):
             correct = 0
             classifier.eval()
             for collabs, labels in valid_loader:
@@ -119,8 +121,12 @@ def train_classifier(train_loader, valid_loader, classifier,
             path = os.path.join(logdir, 'log.txt')
             with open(path, 'a') as f:
                 f.write(log_msg + '\n')
+        
+            if acc > best_acc:
+                best_model = copy.deepcopy(classifier).cpu()
+                best_acc = acc
 
-    return avg_loss, train_acc, acc, precision, recall
+    return avg_loss, train_acc, best_acc, precision, recall, best_model
 
 
 def main():
@@ -188,11 +194,12 @@ def main():
                 bar_format="{desc:<5}{percentage:3.0f}%|{bar:10}{r_bar}")
     best_acc = 0
     for epoch in range(epochs):
-        avg_loss, train_acc, val_acc, precision, recall = train_classifier(
+        avg_loss, train_acc, val_acc, precision, recall, best_model = train_classifier(
             train_loader, valid_loader, classifier,
             [optimizer1, optimizer2], device, epoch, batch_size, dname, threshold)
         if val_acc > best_acc:
-            torch.save(classifier.state_dict(), backup_path)
+            torch.save(best_model.state_dict(), backup_path)
+            best_acc = val_acc
         pbar.set_description(
             f'Train Loss: {avg_loss:.6f}, Train Acc:{train_acc:.2f} Valid Acc: {val_acc:.2f}% Precision: {precision:.2f} Recall: {recall:.2f}')
         pbar.update(1)
